@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Node
+node_modules/
+artifacts/
+cache/
+
+# Hardhat
+typechain/
+
+# OS
+.DS_Store
+Thumbs.db
