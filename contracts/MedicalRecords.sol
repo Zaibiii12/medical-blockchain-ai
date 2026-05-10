@@ -1,99 +1,99 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.19;
 
-contract MedicalRecords {
+// Import OpenZeppelin's AccessControl for role management
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
-    // ==============================
-    // STRUCT
-    // ==============================
+contract MedicalRecords is AccessControl {
+    // Define the Doctor role
+    bytes32 public constant DOCTOR_ROLE = keccak256("DOCTOR_ROLE");
+
     struct Record {
-
+        address patient;
         string fileHash;
-
+        string description;
         address uploadedBy;
-
         uint256 timestamp;
     }
 
-    // ==============================
-    // STORAGE
-    // ==============================
-    Record[] public records;
+    // Mapping from a patient's address to an array of their medical records
+    mapping(address => Record[]) private patientRecords;
 
-    // ==============================
-    // EVENT
-    // ==============================
-    event RecordUploaded(
+    // Events to log activities on the blockchain
+    event RecordUploaded(address indexed patient, address indexed doctor, string fileHash);
+    event DoctorAdded(address indexed doctor);
+    event DoctorRemoved(address indexed doctor);
 
-        string fileHash,
+    constructor() {
+        // Grant the contract deployer the default admin role.
+        // The admin can add or remove doctors.
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    }
 
-        address uploadedBy,
+    // --- Admin Functions ---
 
-        uint256 timestamp
-    );
+    /**
+     * @dev Adds a new doctor. Only callable by the Admin.
+     */
+    function addDoctor(address _doctor) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        grantRole(DOCTOR_ROLE, _doctor);
+        emit DoctorAdded(_doctor);
+    }
 
-    // ==============================
-    // UPLOAD RECORD
-    // ==============================
+    /**
+     * @dev Removes a doctor. Only callable by the Admin.
+     */
+    function removeDoctor(address _doctor) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        revokeRole(DOCTOR_ROLE, _doctor);
+        emit DoctorRemoved(_doctor);
+    }
+
+    // --- Core Functions ---
+
+    /**
+     * @dev Uploads a medical record. Only callable by addresses with the DOCTOR_ROLE.
+     */
     function uploadRecord(
-        string memory _fileHash
-    ) public {
+        address _patient,
+        string memory _fileHash,
+        string memory _description
+    ) external onlyRole(DOCTOR_ROLE) {
+        require(_patient != address(0), "Invalid patient address");
+        require(bytes(_fileHash).length > 0, "File hash cannot be empty");
 
         Record memory newRecord = Record({
-
+            patient: _patient,
             fileHash: _fileHash,
-
+            description: _description,
             uploadedBy: msg.sender,
-
             timestamp: block.timestamp
         });
 
-        records.push(newRecord);
+        patientRecords[_patient].push(newRecord);
 
-        emit RecordUploaded(
-            _fileHash,
-            msg.sender,
-            block.timestamp
-        );
+        emit RecordUploaded(_patient, msg.sender, _fileHash);
     }
 
-    // ==============================
-    // GET RECORD COUNT
-    // ==============================
-    function getRecordCount()
-        public
-        view
-        returns (uint256)
-    {
-        return records.length;
+    /**
+     * @dev Retrieves all records for a specific patient.
+     * Accessible by the patient themselves, or any authorized doctor.
+     */
+    function getPatientRecords(address _patient) external view returns (Record[] memory) {
+        require(
+            msg.sender == _patient || hasRole(DOCTOR_ROLE, msg.sender),
+            "Not authorized to view these records"
+        );
+        return patientRecords[_patient];
     }
 
-    // ==============================
-    // GET RECORD BY INDEX
-    // ==============================
-    function getRecord(
-        uint256 index
-    )
-        public
-        view
-        returns (
-
-            string memory,
-
-            address,
-
-            uint256
-        )
-    {
-        Record memory record = records[index];
-
-        return (
-
-            record.fileHash,
-
-            record.uploadedBy,
-
-            record.timestamp
+    /**
+     * @dev Gets the total count of records for a patient.
+     */
+    function getRecordCount(address _patient) external view returns (uint256) {
+        require(
+            msg.sender == _patient || hasRole(DOCTOR_ROLE, msg.sender),
+            "Not authorized to view record count"
         );
+        return patientRecords[_patient].length;
     }
 }

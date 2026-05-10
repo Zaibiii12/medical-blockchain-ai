@@ -1,61 +1,111 @@
-from fastapi import FastAPI
-import hashlib
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+import requests
+import os
+import io
+import PyPDF2
+from google import genai
+from cryptography.fernet import Fernet
+import base64
+from dotenv import load_dotenv # <--- NEW
 
-from app.blockchain import upload_record, get_record_count, get_record
+# 1. Load the environment variables from .env
+load_dotenv()
 
 app = FastAPI()
 
-# =========================
-# HEALTH CHECK
-# =========================
-@app.get("/")
-def home():
-    return {"message": "Medical Blockchain AI API Running"}
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# =========================
-# HASH FUNCTION
-# =========================
-def generate_hash(data: str):
-    return hashlib.sha256(data.encode()).hexdigest()
+# 2. Fetch keys from environment instead of hardcoding
+PINATA_API_KEY = os.getenv("PINATA_KEY")
+PINATA_SECRET_API_KEY = os.getenv("PINATA_SECRET")
+GEMINI_API_KEY = os.getenv("GEMINI_KEY")
 
+# 3. Setup Encryption
+raw_key_string = os.getenv("ENCRYPTION_KEY")
+if not raw_key_string:
+    raise ValueError("ENCRYPTION_KEY not found in .env file")
+    
+SECRET_ENCRYPTION_KEY = base64.urlsafe_b64encode(raw_key_string.encode().ljust(32)[:32])
+cipher_suite = Fernet(SECRET_ENCRYPTION_KEY)
 
-# =========================
-# UPLOAD RECORD TO BLOCKCHAIN
-# =========================
+ai_client = genai.Client(api_key=GEMINI_API_KEY)
+
+def extract_text_from_pdf(file_bytes):
+    try:
+        pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
+        text = ""
+        for page in pdf_reader.pages:
+            text += page.extract_text() + "\n"
+        return text
+    except Exception as e:
+        print("Error reading PDF:", e)
+        return ""
+
 @app.post("/upload")
-def upload(record: str):
-    file_hash = generate_hash(record)
+async def upload_file(file: UploadFile = File(...)):
+    content = await file.read()
 
-    result = upload_record(file_hash)
+    # AI SUMMARIZATION
+    ai_summary = "AI Summary not available for this file type."
+    if file.filename.lower().endswith('.pdf'):
+        extracted_text = extract_text_from_pdf(content)
+        if extracted_text.strip():
+            try:
+                prompt = f"Summarize this medical record in 2 concise sentences: {extracted_text}"
+                response = ai_client.models.generate_content(
+                    model='gemini-1.5-flash',
+                    contents=prompt,
+                )
+                ai_summary = response.text.strip()
+            except Exception as e:
+                ai_summary = "AI Error: Service Busy."
 
-    return {
-        "message": "Record stored on blockchain",
-        "original_data": record,
-        "hash": file_hash,
-        "transaction": result
+    # ENCRYPTION
+    encrypted_content = cipher_suite.encrypt(content)
+
+    # PINATA UPLOAD
+    url = "https://api.pinata.cloud/pinning/pinFileToIPFS"
+    headers = {
+        "pinata_api_key": PINATA_API_KEY,
+        "pinata_secret_api_key": PINATA_SECRET_API_KEY,
     }
+    files = {"file": (file.filename, encrypted_content)}
 
+    try:
+        pinata_response = requests.post(url, files=files, headers=headers)
+        if pinata_response.status_code == 200:
+            ipfs_hash = pinata_response.json()["IpfsHash"]
+            return {
+                "filename": file.filename,
+                "fileHash": ipfs_hash,
+                "ai_summary": ai_summary
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Pinata Upload Failed")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-# =========================
-# GET TOTAL RECORD COUNT
-# =========================
-@app.get("/count")
-def count():
-    total = get_record_count()
-    return {"total_records": total}
-
-
-# =========================
-# GET RECORD BY INDEX
-# =========================
-@app.get("/record/{index}")
-def fetch_record(index: int):
-    data = get_record(index)
-
-    return {
-        "index": index,
-        "file_hash": data[0],
-        "uploaded_by": data[1],
-        "timestamp": data[2]
-    }
+@app.get("/download/{ipfs_hash}")
+async def download_file(ipfs_hash: str):
+    gateway_url = f"https://gateway.pinata.cloud/ipfs/{ipfs_hash}"
+    try:
+        response = requests.get(gateway_url)
+        decrypted_content = cipher_suite.decrypt(response.content)
+        return Response(
+            content=decrypted_content, 
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"inline; filename={ipfs_hash}.pdf"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=403, detail="Decryption failed.")
