@@ -4,14 +4,16 @@ import axios from "axios";
 import { contractAddress } from "./contracts/address";
 import { abi } from "./contracts/MedicalRecordsABI";
 
-// --- Professional SVG Icons (Replacing Emojis) ---
+// Standard UI Icons
 const Icons = {
   Logo: () => <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>,
   Wallet: () => <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>,
   Shield: () => <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
   Upload: () => <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>,
   Document: () => <svg className="w-5 h-5 text-blue-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
-  Spinner: () => <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+  Chat: () => <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>,
+  Key: () => <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>,
+  Spinner: () => <svg className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
 };
 
 function App() {
@@ -22,13 +24,30 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [records, setRecords] = useState([]);
 
-  // Form States
-  const [doctorAddress, setDoctorAddress] = useState("");
-  const [patientAddress, setPatientAddress] = useState("");
+  // SEPARATED STATES (This fixes the bug!)
+  const [adminDoctorAddress, setAdminDoctorAddress] = useState(""); // For Admin adding a doc
+  const [uploadPatientAddress, setUploadPatientAddress] = useState(""); // For Doc uploading
+  const [searchPatientAddress, setSearchPatientAddress] = useState(""); // For Timeline searching
+  const [manageDoctorAddress, setManageDoctorAddress] = useState(""); // For Patient granting access
+  
   const [description, setDescription] = useState("");
   const [file, setFile] = useState(null);
+  
+  // AI Chat States
+  const [activeChat, setActiveChat] = useState(null); 
+  const [userQuestion, setUserQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
 
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://127.0.0.1:8000";
+
+  // FIX: Force React to reload when you switch MetaMask accounts
+  useEffect(() => {
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', () => window.location.reload());
+      window.ethereum.on('chainChanged', () => window.location.reload());
+    }
+  }, []);
 
   const connectWallet = async () => {
     if (window.ethereum) {
@@ -56,18 +75,42 @@ function App() {
 
   const handleAddDoctor = async () => {
     try {
-      const tx = await contract.addDoctor(doctorAddress.trim());
+      const tx = await contract.addDoctor(adminDoctorAddress.trim());
       await tx.wait();
-      alert("Doctor authorized successfully!");
-      setDoctorAddress(""); // clear input
+      alert("Doctor authorized into system.");
+      setAdminDoctorAddress("");
     } catch (error) {
-      alert("Action failed. Admin only.");
+      alert("Action failed. Are you sure you are logged in as Admin?");
+    }
+  };
+
+  const handleGrantAccess = async () => {
+    try {
+      const tx = await contract.grantAccess(manageDoctorAddress.trim());
+      await tx.wait();
+      alert("Doctor granted viewing access to your records.");
+      setManageDoctorAddress("");
+    } catch (error) {
+      alert("Failed to grant access. Check console for details.");
+      console.error(error);
+    }
+  };
+
+  const handleRevokeAccess = async () => {
+    try {
+      const tx = await contract.revokeAccess(manageDoctorAddress.trim());
+      await tx.wait();
+      alert("Doctor access revoked permanently.");
+      setManageDoctorAddress("");
+    } catch (error) {
+      alert("Failed to revoke access.");
+      console.error(error);
     }
   };
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!file || !patientAddress || !description) return;
+    if (!file || !uploadPatientAddress || !description) return;
     setLoading(true);
 
     try {
@@ -78,37 +121,56 @@ function App() {
       const { fileHash, ai_summary } = response.data;
       const finalDescription = `${description} | AI Summary: ${ai_summary}`;
 
-      const tx = await contract.uploadRecord(patientAddress.trim(), fileHash, finalDescription);
+      const tx = await contract.uploadRecord(uploadPatientAddress.trim(), fileHash, finalDescription);
       await tx.wait();
-      alert("Record Encrypted & Stored!");
+      alert("Record Encrypted & Stored on Blockchain!");
       
-      // Reset form
       setFile(null);
       setDescription("");
-      setPatientAddress("");
+      setUploadPatientAddress("");
       setLoading(false);
     } catch (error) {
       console.error(error);
-      alert("Upload failed. Ensure backend is running.");
+      alert("Upload failed.");
       setLoading(false);
     }
   };
 
   const fetchRecords = async () => {
     try {
-      const target = patientAddress.trim() || account;
+      // If search bar is empty, query the logged-in account's records
+      const target = searchPatientAddress.trim() || account;
       const data = await contract.getPatientRecords(target);
       setRecords(data);
     } catch (error) {
-      alert("Unauthorized to view these records.");
+      console.error(error);
+      const target = searchPatientAddress.trim() || account;
+      alert(`Access Denied.\n\nYou are logged in as: ${account.slice(0,6)}...\nYou are trying to view: ${target.slice(0,6)}...\n\nOnly the Patient or an Authorized Doctor can view this.`);
     }
   };
 
+  const handleChatSubmit = async () => {
+    if (!userQuestion.trim()) return;
+    setChatLoading(true);
+    setAiAnswer("");
+    
+    try {
+      const response = await axios.post(`${BACKEND_URL}/chat`, {
+        ipfs_hash: activeChat,
+        question: userQuestion
+      });
+      setAiAnswer(response.data.answer);
+      setUserQuestion("");
+    } catch (error) {
+      setAiAnswer("Error reaching AI service. Please try again.");
+    }
+    setChatLoading(false);
+  };
+
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 relative">
       
-      {/* Sleek Top Navigation */}
-      <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
+      <nav className="bg-white border-b border-slate-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center gap-3">
@@ -127,7 +189,7 @@ function App() {
               )}
               
               {!account ? (
-                <button onClick={connectWallet} className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all">
+                <button onClick={connectWallet} className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition-all">
                   <Icons.Wallet /> Connect Web3 Wallet
                 </button>
               ) : (
@@ -141,16 +203,12 @@ function App() {
         </div>
       </nav>
 
-      {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        
-        {/* Responsive Grid Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          {/* Left Column (Forms & Controls) */}
           <div className="lg:col-span-4 space-y-6">
             
-            {/* Admin Panel */}
+            {/* ADMIN PANEL */}
             {isAdmin && (
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
@@ -158,24 +216,20 @@ function App() {
                   <h3 className="text-sm font-semibold text-slate-800">System Access Control</h3>
                 </div>
                 <div className="p-6 space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Practitioner Wallet</label>
-                    <input 
-                      type="text"
-                      className="block w-full border-slate-200 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm px-4 py-2.5 border outline-none transition-shadow"
-                      placeholder="0x..." 
-                      value={doctorAddress}
-                      onChange={e => setDoctorAddress(e.target.value)} 
-                    />
-                  </div>
-                  <button onClick={handleAddDoctor} className="w-full flex justify-center py-2.5 px-4 border border-slate-300 rounded-lg shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all">
-                    Authorize Credentials
+                  <input 
+                    className="block w-full border-slate-200 rounded-lg shadow-sm focus:ring-blue-500 sm:text-sm px-4 py-2.5 border outline-none"
+                    placeholder="Doctor Wallet (0x...)" 
+                    value={adminDoctorAddress}
+                    onChange={e => setAdminDoctorAddress(e.target.value)} 
+                  />
+                  <button onClick={handleAddDoctor} className="w-full py-2.5 px-4 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all">
+                    Authorize Practitioner
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Doctor Panel */}
+            {/* DOCTOR PANEL */}
             {isDoctor && (
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
@@ -183,131 +237,128 @@ function App() {
                   <h3 className="text-sm font-semibold text-slate-800">Clinical Data Upload</h3>
                 </div>
                 <form onSubmit={handleUpload} className="p-6 space-y-5">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Patient Address</label>
-                    <input 
-                      type="text" 
-                      className="block w-full border-slate-200 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm px-4 py-2.5 border outline-none transition-shadow" 
-                      placeholder="0x..." 
-                      value={patientAddress}
-                      onChange={e => setPatientAddress(e.target.value)} 
-                      required 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Clinical Diagnosis</label>
-                    <input 
-                      type="text" 
-                      className="block w-full border-slate-200 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm px-4 py-2.5 border outline-none transition-shadow" 
-                      placeholder="e.g. Annual Blood Work" 
-                      value={description}
-                      onChange={e => setDescription(e.target.value)} 
-                      required 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Source Document</label>
-                    <input 
-                      type="file" 
-                      className="block w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer border border-slate-200 rounded-lg" 
-                      onChange={e => setFile(e.target.files[0])} 
-                      required 
-                    />
-                  </div>
-                  <button 
-                    type="submit" 
-                    disabled={loading}
-                    className={`w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white transition-all ${loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'}`}
-                  >
-                    {loading ? <><Icons.Spinner /> Encrypting & Processing...</> : "Sign & Encrypt Payload"}
+                  <input className="block w-full border-slate-200 rounded-lg shadow-sm focus:ring-blue-500 sm:text-sm px-4 py-2.5 border outline-none" placeholder="Patient Address (0x...)" value={uploadPatientAddress} onChange={e => setUploadPatientAddress(e.target.value)} required />
+                  <input className="block w-full border-slate-200 rounded-lg shadow-sm focus:ring-blue-500 sm:text-sm px-4 py-2.5 border outline-none" placeholder="Diagnosis / Notes" value={description} onChange={e => setDescription(e.target.value)} required />
+                  <input type="file" className="block w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-slate-200 rounded-lg" onChange={e => setFile(e.target.files[0])} required />
+                  <button type="submit" disabled={loading} className={`w-full flex justify-center items-center py-2.5 px-4 rounded-lg text-sm font-medium text-white transition-all ${loading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                    {loading ? <><span className="text-white"><Icons.Spinner /></span> Encrypting...</> : "Sign & Encrypt Payload"}
                   </button>
                 </form>
               </div>
             )}
             
-            {/* Instruction block if no roles or not connected */}
-            {!isAdmin && !isDoctor && account && (
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <p className="text-sm text-slate-500 leading-relaxed">
-                  You are logged in as a Patient. Enter your address in the timeline panel to sync your securely encrypted medical history.
-                </p>
+            {/* PATIENT PERMISSION MANAGER */}
+            {account && !isAdmin && (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+                  <Icons.Key />
+                  <h3 className="text-sm font-semibold text-slate-800">Manage Record Permissions</h3>
+                </div>
+                <div className="p-6 space-y-4">
+                  <p className="text-xs text-slate-500 mb-2">Control which practitioners can view your data.</p>
+                  <input 
+                    className="block w-full border-slate-200 rounded-lg shadow-sm focus:ring-blue-500 sm:text-sm px-4 py-2.5 border outline-none"
+                    placeholder="Doctor Wallet (0x...)" 
+                    value={manageDoctorAddress}
+                    onChange={e => setManageDoctorAddress(e.target.value)} 
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={handleGrantAccess} className="w-1/2 py-2 border border-green-200 bg-green-50 text-green-700 rounded-lg text-sm font-medium hover:bg-green-100 transition-all">Grant</button>
+                    <button onClick={handleRevokeAccess} className="w-1/2 py-2 border border-red-200 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 transition-all">Revoke</button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
 
-          {/* Right Column (Data Timeline) */}
           <div className="lg:col-span-8">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[500px]">
               
-              {/* Timeline Header */}
-              <div className="px-6 py-5 border-b border-slate-100 bg-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900">Patient Ledger</h3>
-                  <p className="text-sm text-slate-500 mt-1">Immutable history of encrypted medical records.</p>
+                  <p className="text-sm text-slate-500">Immutable encrypted history.</p>
                 </div>
-                <div className="flex w-full sm:w-auto gap-2">
-                  <input 
-                    type="text" 
-                    className="block w-full sm:w-64 border-slate-200 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm px-4 py-2 border outline-none" 
-                    placeholder="Search by Wallet Address..." 
-                    value={patientAddress}
-                    onChange={e => setPatientAddress(e.target.value)} 
-                  />
-                  <button onClick={fetchRecords} className="inline-flex items-center px-4 py-2 border border-slate-300 rounded-lg shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors">
-                    Sync
-                  </button>
+                <div className="flex gap-2">
+                  <input className="hidden sm:block border-slate-200 rounded-lg px-4 py-2 border outline-none text-sm" placeholder="Search Address..." value={searchPatientAddress} onChange={e => setSearchPatientAddress(e.target.value)} />
+                  <button onClick={fetchRecords} className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50">Sync</button>
                 </div>
               </div>
 
-              {/* Records List */}
               <div className="p-6">
                 {records.length === 0 ? (
-                  <div className="text-center py-16">
-                    <Icons.Document />
-                    <h3 className="mt-2 text-sm font-medium text-slate-900">No records found</h3>
-                    <p className="mt-1 text-sm text-slate-500">Sync a valid patient address to view the encrypted timeline.</p>
-                  </div>
+                  <div className="text-center py-16 text-slate-500 text-sm">No records found. Click Sync to view.</div>
                 ) : (
                   <ul className="space-y-4">
                     {records.map((r, i) => (
-                      <li key={i} className="bg-slate-50 rounded-xl border border-slate-200 p-5 hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
-                        <div className="flex justify-between items-start mb-3">
-                          <a 
-                            href={`${BACKEND_URL}/download/${r.fileHash}`} 
-                            target="_blank" 
-                            rel="noreferrer"
-                            className="flex items-center text-sm font-semibold text-blue-600 hover:text-blue-800"
-                          >
-                            <Icons.Document /> View Decrypted Report
-                          </a>
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-200 text-slate-800">
-                            {new Date(Number(r.timestamp) * 1000).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <div className="pl-7">
-                          <p className="text-sm text-slate-700 leading-relaxed mb-3">
-                            <strong className="text-slate-900 font-medium">Notes & AI Insight: </strong> 
-                            {r.description}
-                          </p>
-                          <div className="flex items-center justify-between text-xs text-slate-400 font-mono mt-4 pt-3 border-t border-slate-200">
-                            <span className="truncate max-w-[200px] sm:max-w-md">CID: {r.fileHash}</span>
-                            <span className="flex items-center text-green-600 font-sans font-medium">
-                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
-                              Verified Chain
-                            </span>
+                      <li key={i} className="bg-slate-50 rounded-xl border border-slate-200 p-5 hover:border-blue-300 transition-all">
+                        <div className="flex justify-between items-center mb-4">
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-200 text-slate-800">{new Date(Number(r.timestamp) * 1000).toLocaleDateString()}</span>
+                          <div className="flex gap-3">
+                            <button onClick={() => setActiveChat(r.fileHash)} className="flex items-center text-sm font-semibold text-emerald-600 hover:text-emerald-800">
+                              <Icons.Chat /> Ask AI
+                            </button>
+                            <a href={`${BACKEND_URL}/download/${r.fileHash}`} target="_blank" rel="noreferrer" className="flex items-center text-sm font-semibold text-blue-600 hover:text-blue-800">
+                              <Icons.Document /> Decrypt PDF
+                            </a>
                           </div>
                         </div>
+                        <p className="text-sm text-slate-700 leading-relaxed"><strong className="text-slate-900 font-medium">Notes & AI Insight: </strong>{r.description}</p>
                       </li>
                     ))}
                   </ul>
                 )}
               </div>
-              
             </div>
           </div>
-          
         </div>
       </main>
+
+      {/* AI Chat Slide-Out Sidebar */}
+      {activeChat && (
+        <>
+          <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40 transition-opacity" onClick={() => setActiveChat(null)}></div>
+          <div className="fixed inset-y-0 right-0 w-full sm:w-96 bg-white shadow-2xl z-50 border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-in-out">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-slate-800 flex items-center"><Icons.Chat /> Record AI Assistant</h3>
+              <button onClick={() => setActiveChat(null)} className="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800 leading-relaxed border border-blue-100">
+                I am actively reading the decrypted contents of CID: <span className="font-mono text-xs">{activeChat.slice(0,8)}...</span> Ask me anything about this medical file.
+              </div>
+              {chatLoading && (
+                <div className="flex items-center text-sm text-slate-500 animate-pulse">
+                  <span className="text-blue-600 mr-2"><Icons.Spinner /></span> Reading document securely...
+                </div>
+              )}
+              {aiAnswer && !chatLoading && (
+                <div className="bg-slate-100 p-4 rounded-xl text-sm text-slate-800 border border-slate-200 leading-relaxed shadow-sm">
+                  <strong className="block mb-1 text-slate-900">AI Response:</strong>
+                  {aiAnswer}
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t border-slate-100 bg-white">
+              <input 
+                className="w-full border border-slate-200 rounded-lg px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 mb-3 shadow-sm"
+                placeholder="e.g. Do I need to fast before this test?"
+                value={userQuestion}
+                onChange={(e) => setUserQuestion(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleChatSubmit()}
+              />
+              <button 
+                onClick={handleChatSubmit}
+                disabled={chatLoading || !userQuestion.trim()}
+                className="w-full bg-slate-900 text-white py-3 rounded-lg text-sm font-semibold hover:bg-slate-800 disabled:bg-slate-300 transition-colors shadow-sm"
+              >
+                {chatLoading ? "Analyzing..." : "Ask Question"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
     </div>
   );
 }

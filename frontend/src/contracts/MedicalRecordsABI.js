@@ -31,16 +31,9 @@ export const abi = [
         {
           "indexed": true,
           "internalType": "address",
-          "name": "doctor",
+          "name": "patient",
           "type": "address"
-        }
-      ],
-      "name": "DoctorAdded",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
+        },
         {
           "indexed": true,
           "internalType": "address",
@@ -48,7 +41,7 @@ export const abi = [
           "type": "address"
         }
       ],
-      "name": "DoctorRemoved",
+      "name": "AccessGranted",
       "type": "event"
     },
     {
@@ -65,6 +58,32 @@ export const abi = [
           "internalType": "address",
           "name": "doctor",
           "type": "address"
+        }
+      ],
+      "name": "AccessRevoked",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "doctor",
+          "type": "address"
+        }
+      ],
+      "name": "DoctorAdded",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "patient",
+          "type": "address"
         },
         {
           "indexed": false,
@@ -73,7 +92,7 @@ export const abi = [
           "type": "string"
         }
       ],
-      "name": "RecordUploaded",
+      "name": "RecordAdded",
       "type": "event"
     },
     {
@@ -203,11 +222,6 @@ export const abi = [
         {
           "components": [
             {
-              "internalType": "address",
-              "name": "patient",
-              "type": "address"
-            },
-            {
               "internalType": "string",
               "name": "fileHash",
               "type": "string"
@@ -218,11 +232,6 @@ export const abi = [
               "type": "string"
             },
             {
-              "internalType": "address",
-              "name": "uploadedBy",
-              "type": "address"
-            },
-            {
               "internalType": "uint256",
               "name": "timestamp",
               "type": "uint256"
@@ -231,25 +240,6 @@ export const abi = [
           "internalType": "struct MedicalRecords.Record[]",
           "name": "",
           "type": "tuple[]"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "_patient",
-          "type": "address"
-        }
-      ],
-      "name": "getRecordCount",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
         }
       ],
       "stateMutability": "view",
@@ -272,6 +262,19 @@ export const abi = [
         }
       ],
       "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_doctor",
+          "type": "address"
+        }
+      ],
+      "name": "grantAccess",
+      "outputs": [],
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
@@ -320,13 +323,24 @@ export const abi = [
       "inputs": [
         {
           "internalType": "address",
-          "name": "_doctor",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "",
           "type": "address"
         }
       ],
-      "name": "removeDoctor",
-      "outputs": [],
-      "stateMutability": "nonpayable",
+      "name": "isAuthorized",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -343,6 +357,19 @@ export const abi = [
         }
       ],
       "name": "renounceRole",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_doctor",
+          "type": "address"
+        }
+      ],
+      "name": "revokeAccess",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -407,4 +434,4 @@ export const abi = [
       "stateMutability": "nonpayable",
       "type": "function"
     }
-  ];
+];
