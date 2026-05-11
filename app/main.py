@@ -6,7 +6,7 @@ import requests
 import os
 import io
 import PyPDF2
-from google import genai
+import google.genai as genai
 from cryptography.fernet import Fernet
 import base64
 from dotenv import load_dotenv

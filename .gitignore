@@ -15,3 +15,10 @@ typechain/
 # OS
 .DS_Store
 Thumbs.db
+.env
+node_modules/
+venv/
+artifacts/
+cache/
+__pycache__/
+medical.db

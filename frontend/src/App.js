@@ -13,6 +13,7 @@ const Icons = {
   Document: () => <svg className="w-5 h-5 text-blue-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
   Chat: () => <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>,
   Key: () => <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>,
+  Alert: () => <svg className="w-4 h-4 text-red-500 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>,
   Spinner: () => <svg className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
 };
 
@@ -24,14 +25,18 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [records, setRecords] = useState([]);
 
-  // SEPARATED STATES (This fixes the bug!)
-  const [adminDoctorAddress, setAdminDoctorAddress] = useState(""); // For Admin adding a doc
-  const [uploadPatientAddress, setUploadPatientAddress] = useState(""); // For Doc uploading
-  const [searchPatientAddress, setSearchPatientAddress] = useState(""); // For Timeline searching
-  const [manageDoctorAddress, setManageDoctorAddress] = useState(""); // For Patient granting access
-  
+  // Form States
+  const [adminDoctorAddress, setAdminDoctorAddress] = useState(""); 
+  const [uploadPatientAddress, setUploadPatientAddress] = useState(""); 
+  const [searchPatientAddress, setSearchPatientAddress] = useState(""); 
   const [description, setDescription] = useState("");
   const [file, setFile] = useState(null);
+  
+  // Advanced Permission States
+  const [doctorTargetPatient, setDoctorTargetPatient] = useState(""); 
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [authorizedDoctors, setAuthorizedDoctors] = useState([]);
+  const [emergencyLogs, setEmergencyLogs] = useState([]); // NEW: Stores audit trail
   
   // AI Chat States
   const [activeChat, setActiveChat] = useState(null); 
@@ -41,13 +46,57 @@ function App() {
 
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://127.0.0.1:8000";
 
-  // FIX: Force React to reload when you switch MetaMask accounts
   useEffect(() => {
     if (window.ethereum) {
       window.ethereum.on('accountsChanged', () => window.location.reload());
       window.ethereum.on('chainChanged', () => window.location.reload());
     }
   }, []);
+
+  const fetchPatientPermissions = async (medicalContract, userAddress) => {
+    try {
+      const pendingList = await medicalContract.getPendingRequests();
+      const authorizedList = await medicalContract.getAuthorizedDoctors();
+      
+      // Filter active doctors
+      const activeDocs = [];
+      for (let i = 0; i < authorizedList.length; i++) {
+        const doc = authorizedList[i];
+        const isStillAuthed = await medicalContract.isAuthorized(userAddress, doc);
+        if (isStillAuthed && !activeDocs.includes(doc)) {
+          activeDocs.push(doc);
+        }
+      }
+
+      // Filter pending requests
+      const truePending = [];
+      for (let i = 0; i < pendingList.length; i++) {
+        const doc = pendingList[i];
+        const stillPending = await medicalContract.hasRequested(userAddress, doc);
+        if (stillPending && !truePending.includes(doc)) {
+          truePending.push(doc);
+        }
+      }
+
+      setPendingRequests(truePending);
+      setAuthorizedDoctors(activeDocs);
+
+      // --- NEW: Fetch Emergency Audit Trail ---
+      // We ask the blockchain to filter past EmergencyOverride events where this user is the patient
+      const filter = medicalContract.filters.EmergencyOverride(null, userAddress);
+      const events = await medicalContract.queryFilter(filter);
+      
+      const logs = events.map(e => ({
+        doctor: e.args[0], // Doctor's address
+        timestamp: Number(e.args[2]) * 1000 // Convert blockchain timestamp to JS milliseconds
+      })).reverse(); // Put newest events at the top
+
+      setEmergencyLogs(logs);
+
+    } catch (error) {
+      console.error("Error fetching permissions or logs:", error);
+    }
+  };
 
   const connectWallet = async () => {
     if (window.ethereum) {
@@ -63,8 +112,15 @@ function App() {
         const ADMIN_ROLE = "0x0000000000000000000000000000000000000000000000000000000000000000";
         const DOCTOR_ROLE = await medicalContract.DOCTOR_ROLE();
 
-        setIsAdmin(await medicalContract.hasRole(ADMIN_ROLE, address));
-        setIsDoctor(await medicalContract.hasRole(DOCTOR_ROLE, address));
+        const _isAdmin = await medicalContract.hasRole(ADMIN_ROLE, address);
+        const _isDoctor = await medicalContract.hasRole(DOCTOR_ROLE, address);
+        
+        setIsAdmin(_isAdmin);
+        setIsDoctor(_isDoctor);
+
+        if (!_isAdmin && !_isDoctor) {
+          fetchPatientPermissions(medicalContract, address);
+        }
       } catch (error) {
         console.error("Connection error:", error);
       }
@@ -80,31 +136,58 @@ function App() {
       alert("Doctor authorized into system.");
       setAdminDoctorAddress("");
     } catch (error) {
-      alert("Action failed. Are you sure you are logged in as Admin?");
+      alert("Action failed. Admin only.");
     }
   };
 
-  const handleGrantAccess = async () => {
+  const handleRequestAccess = async () => {
     try {
-      const tx = await contract.grantAccess(manageDoctorAddress.trim());
+      const tx = await contract.requestAccess(doctorTargetPatient.trim());
       await tx.wait();
-      alert("Doctor granted viewing access to your records.");
-      setManageDoctorAddress("");
+      alert("Access request sent to patient.");
+      setDoctorTargetPatient("");
     } catch (error) {
-      alert("Failed to grant access. Check console for details.");
+      alert("Failed to send request. You may already have access or a pending request.");
       console.error(error);
     }
   };
 
-  const handleRevokeAccess = async () => {
+  const handleEmergencyOverride = async () => {
+    const confirmEmergency = window.confirm(
+      "WARNING: You are triggering a Break-the-Glass Emergency Override.\n\nThis will bypass patient consent and permanently log an immutable audit event on the blockchain under your identity. Only proceed if this is a life-threatening emergency."
+    );
+    if (!confirmEmergency) return;
+
     try {
-      const tx = await contract.revokeAccess(manageDoctorAddress.trim());
+      const tx = await contract.emergencyOverride(doctorTargetPatient.trim());
+      await tx.wait();
+      alert("Emergency Access Granted. Audit event logged.");
+      setDoctorTargetPatient("");
+    } catch (error) {
+      alert("Failed to override. You might already have access.");
+      console.error(error);
+    }
+  };
+
+  const handleGrantAccess = async (doctorAddress) => {
+    try {
+      const tx = await contract.grantAccess(doctorAddress.trim());
+      await tx.wait();
+      alert("Access granted successfully.");
+      fetchPatientPermissions(contract, account); 
+    } catch (error) {
+      alert("Failed to grant access.");
+    }
+  };
+
+  const handleRevokeAccess = async (doctorAddress) => {
+    try {
+      const tx = await contract.revokeAccess(doctorAddress.trim());
       await tx.wait();
       alert("Doctor access revoked permanently.");
-      setManageDoctorAddress("");
+      fetchPatientPermissions(contract, account); 
     } catch (error) {
       alert("Failed to revoke access.");
-      console.error(error);
     }
   };
 
@@ -138,12 +221,10 @@ function App() {
 
   const fetchRecords = async () => {
     try {
-      // If search bar is empty, query the logged-in account's records
       const target = searchPatientAddress.trim() || account;
       const data = await contract.getPatientRecords(target);
       setRecords(data);
     } catch (error) {
-      console.error(error);
       const target = searchPatientAddress.trim() || account;
       alert(`Access Denied.\n\nYou are logged in as: ${account.slice(0,6)}...\nYou are trying to view: ${target.slice(0,6)}...\n\nOnly the Patient or an Authorized Doctor can view this.`);
     }
@@ -229,43 +310,116 @@ function App() {
               </div>
             )}
 
-            {/* DOCTOR PANEL */}
+            {/* DOCTOR PANELS */}
             {isDoctor && (
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
-                  <Icons.Upload />
-                  <h3 className="text-sm font-semibold text-slate-800">Clinical Data Upload</h3>
+              <>
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+                    <Icons.Key />
+                    <h3 className="text-sm font-semibold text-slate-800">Patient Access Request</h3>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <p className="text-xs text-slate-500 mb-2">Request standard access or trigger an emergency override.</p>
+                    <input 
+                      className="block w-full border-slate-200 rounded-lg shadow-sm focus:ring-blue-500 sm:text-sm px-4 py-2.5 border outline-none"
+                      placeholder="Patient Wallet (0x...)" 
+                      value={doctorTargetPatient}
+                      onChange={e => setDoctorTargetPatient(e.target.value)} 
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={handleRequestAccess} className="w-1/2 py-2 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 transition-all">Request Access</button>
+                      <button onClick={handleEmergencyOverride} className="w-1/2 flex items-center justify-center gap-1 py-2 border border-red-200 bg-red-50 text-red-700 rounded-lg text-sm font-bold hover:bg-red-100 transition-all shadow-sm">
+                        <Icons.Alert /> Override
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <form onSubmit={handleUpload} className="p-6 space-y-5">
-                  <input className="block w-full border-slate-200 rounded-lg shadow-sm focus:ring-blue-500 sm:text-sm px-4 py-2.5 border outline-none" placeholder="Patient Address (0x...)" value={uploadPatientAddress} onChange={e => setUploadPatientAddress(e.target.value)} required />
-                  <input className="block w-full border-slate-200 rounded-lg shadow-sm focus:ring-blue-500 sm:text-sm px-4 py-2.5 border outline-none" placeholder="Diagnosis / Notes" value={description} onChange={e => setDescription(e.target.value)} required />
-                  <input type="file" className="block w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-slate-200 rounded-lg" onChange={e => setFile(e.target.files[0])} required />
-                  <button type="submit" disabled={loading} className={`w-full flex justify-center items-center py-2.5 px-4 rounded-lg text-sm font-medium text-white transition-all ${loading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'}`}>
-                    {loading ? <><span className="text-white"><Icons.Spinner /></span> Encrypting...</> : "Sign & Encrypt Payload"}
-                  </button>
-                </form>
-              </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+                    <Icons.Upload />
+                    <h3 className="text-sm font-semibold text-slate-800">Clinical Data Upload</h3>
+                  </div>
+                  <form onSubmit={handleUpload} className="p-6 space-y-5">
+                    <input className="block w-full border-slate-200 rounded-lg shadow-sm focus:ring-blue-500 sm:text-sm px-4 py-2.5 border outline-none" placeholder="Patient Address (0x...)" value={uploadPatientAddress} onChange={e => setUploadPatientAddress(e.target.value)} required />
+                    <input className="block w-full border-slate-200 rounded-lg shadow-sm focus:ring-blue-500 sm:text-sm px-4 py-2.5 border outline-none" placeholder="Diagnosis / Notes" value={description} onChange={e => setDescription(e.target.value)} required />
+                    <input type="file" className="block w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-slate-200 rounded-lg" onChange={e => setFile(e.target.files[0])} required />
+                    <button type="submit" disabled={loading} className={`w-full flex justify-center items-center py-2.5 px-4 rounded-lg text-sm font-medium text-white transition-all ${loading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                      {loading ? <><span className="text-white"><Icons.Spinner /></span> Encrypting...</> : "Sign & Encrypt Payload"}
+                    </button>
+                  </form>
+                </div>
+              </>
             )}
             
             {/* PATIENT PERMISSION MANAGER */}
-            {account && !isAdmin && (
+            {account && !isAdmin && !isDoctor && (
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
                   <Icons.Key />
-                  <h3 className="text-sm font-semibold text-slate-800">Manage Record Permissions</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">Security Dashboard</h3>
                 </div>
-                <div className="p-6 space-y-4">
-                  <p className="text-xs text-slate-500 mb-2">Control which practitioners can view your data.</p>
-                  <input 
-                    className="block w-full border-slate-200 rounded-lg shadow-sm focus:ring-blue-500 sm:text-sm px-4 py-2.5 border outline-none"
-                    placeholder="Doctor Wallet (0x...)" 
-                    value={manageDoctorAddress}
-                    onChange={e => setManageDoctorAddress(e.target.value)} 
-                  />
-                  <div className="flex gap-2">
-                    <button onClick={handleGrantAccess} className="w-1/2 py-2 border border-green-200 bg-green-50 text-green-700 rounded-lg text-sm font-medium hover:bg-green-100 transition-all">Grant</button>
-                    <button onClick={handleRevokeAccess} className="w-1/2 py-2 border border-red-200 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 transition-all">Revoke</button>
+                <div className="p-6 space-y-6">
+                  
+                  {/* Pending Requests List */}
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Pending Requests ({pendingRequests.length})</h4>
+                    {pendingRequests.length === 0 ? (
+                      <p className="text-sm text-slate-400 italic">No pending requests.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {pendingRequests.map((docAddress, idx) => (
+                          <li key={idx} className="flex justify-between items-center bg-orange-50 border border-orange-100 p-3 rounded-lg">
+                            <span className="text-sm font-mono text-orange-800">{docAddress.slice(0, 6)}...{docAddress.slice(-4)}</span>
+                            <button onClick={() => handleGrantAccess(docAddress)} className="text-xs font-bold bg-orange-500 hover:bg-orange-600 text-white py-1.5 px-3 rounded shadow-sm">Approve</button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
+
+                  <hr className="border-slate-100" />
+
+                  {/* Active Doctors List */}
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Authorized Doctors ({authorizedDoctors.length})</h4>
+                    {authorizedDoctors.length === 0 ? (
+                      <p className="text-sm text-slate-400 italic">No doctors have access to your vault.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {authorizedDoctors.map((docAddress, idx) => (
+                          <li key={idx} className="flex justify-between items-center bg-slate-50 border border-slate-200 p-3 rounded-lg">
+                            <span className="text-sm font-mono text-slate-700">{docAddress.slice(0, 6)}...{docAddress.slice(-4)}</span>
+                            <button onClick={() => handleRevokeAccess(docAddress)} className="text-xs font-bold bg-red-100 hover:bg-red-200 text-red-600 py-1.5 px-3 rounded border border-red-200 shadow-sm">Revoke</button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  {/* NEW: EMERGENCY AUDIT TRAIL */}
+                  {emergencyLogs.length > 0 && (
+                    <>
+                      <hr className="border-slate-100" />
+                      <div>
+                        <h4 className="text-xs font-bold text-red-600 uppercase tracking-wider mb-3 flex items-center">
+                          <Icons.Alert /> Audit Log: Emergency Access
+                        </h4>
+                        <p className="text-xs text-slate-500 mb-3">The following practitioners bypassed standard consent protocols.</p>
+                        <ul className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                          {emergencyLogs.map((log, idx) => (
+                            <li key={idx} className="flex justify-between items-center bg-red-50 border border-red-100 p-3 rounded-lg">
+                              <span className="text-sm font-mono text-red-800">{log.doctor.slice(0, 6)}...{log.doctor.slice(-4)}</span>
+                              <span className="text-xs font-semibold text-red-600">
+                                {new Date(log.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </>
+                  )}
+
                 </div>
               </div>
             )}
@@ -273,7 +427,6 @@ function App() {
 
           <div className="lg:col-span-8">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[500px]">
-              
               <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900">Patient Ledger</h3>
@@ -299,7 +452,7 @@ function App() {
                               <Icons.Chat /> Ask AI
                             </button>
                             <a href={`${BACKEND_URL}/download/${r.fileHash}`} target="_blank" rel="noreferrer" className="flex items-center text-sm font-semibold text-blue-600 hover:text-blue-800">
-                              <Icons.Document /> Decrypt PDF
+                              <Icons.Document /> Decrypt Data
                             </a>
                           </div>
                         </div>
