@@ -65,7 +65,7 @@ async def upload_file(file: UploadFile = File(...)):
             try:
                 prompt = f"Summarize this medical record in 2 concise sentences: {extracted_text}"
                 response = ai_client.models.generate_content(
-                    model='gemini-2.0-flash',
+                    model='gemini-1.5-flash',
                     contents=prompt,
                 )
                 ai_summary = response.text.strip()
@@ -133,7 +133,7 @@ async def chat_with_record(request: ChatRequest):
         """
         
         gemini_response = ai_client.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-1.5-flash',
             contents=prompt,
         )
         return {"answer": gemini_response.text.strip()}
