@@ -22,3 +22,5 @@ artifacts/
 cache/
 __pycache__/
 medical.db
+medical.db
+uploads/
