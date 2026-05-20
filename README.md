@@ -18,8 +18,8 @@ MedChain is a secure, Web3-powered healthcare decentralized application (dApp) d
 * **Storage & AI:** Pinata (IPFS), Google Gemini 2.5 Flash API, Fernet Encryption
 
 ## 🚀 Live Demo
-* **Frontend Application:** [Insert your Vercel URL here]
-* **Smart Contract Address:** `[Insert your Sepolia Contract Address here]`
+* **Frontend Application:** [Live App on Vercel](https://medical-blockchain-ai.vercel.app/)
+* **Smart Contract Address:** [`0xBF023B919B3c15628D8B31F605c6D2a80aD00725`](https://sepolia.etherscan.io/address/0xBF023B919B3c15628D8B31F605c6D2a80aD00725) (Sepolia Testnet)
 
 ## 💻 How It Works (Architecture)
 1. Patient uploads a medical PDF.
