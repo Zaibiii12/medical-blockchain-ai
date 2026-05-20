@@ -1,6 +1,6 @@
 # 🏥 MedChain: Decentralized Medical Vault & AI Assistant
 
-![MedChain Dashboard](./dashboard.png)
+![MedChain Dashboard](./Dashboard.png)
 
 ## 📖 Overview
 MedChain is a secure, Web3-powered healthcare decentralized application (dApp) designed to give patients total ownership of their medical records. By combining blockchain immutability, IPFS decentralized storage, and a customized AI assistant, this project solves the healthcare industry's issues with data silos and unauthorized access.
