@@ -43,6 +43,12 @@ class ChatRequest(BaseModel):
     ipfs_hash: str
     question: str
 
+# --- HEALTH CHECK (Added for QA Testing) ---
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+# --- HELPER FUNCTIONS ---
 def extract_text_from_pdf(file_bytes):
     try:
         pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
@@ -54,6 +60,7 @@ def extract_text_from_pdf(file_bytes):
         print("Error reading PDF:", e)
         return ""
 
+# --- ENDPOINTS ---
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     content = await file.read()
